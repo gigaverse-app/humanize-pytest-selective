@@ -21,3 +21,5 @@
 ```bash
 pip3 uninstall -y humanize && pip3 install -U humanize && python3 -c "import humanize; print(humanize.__version__)"
 ```
+
+<!-- Probe: documentation-only change for CI lane routing. -->
