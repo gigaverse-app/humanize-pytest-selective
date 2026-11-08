@@ -9,7 +9,28 @@ env:
   PIP_DISABLE_PIP_VERSION_CHECK: 1
 
 jobs:
+  select-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      lanes: ${{ steps.plan.outputs.lanes }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: plan
+        uses: gigaverse-app/pytest-selective/actions/plan-lanes@3353a614a71cdb01c7b9a82a40050588ce81741d # v0.4.2
+        with:
+          config: .github/test-lanes.json
+
   benchmarks:
+    needs: select-tests
+    # Pushes, tags and dispatches always run: they upload the CodSpeed baseline that PRs compare against.
+    # On pull requests, a successful plan can skip an unaffected lane; a failed planner never does.
+    if: >-
+      ${{ always() && !cancelled() && (github.event_name != 'pull_request' ||
+          needs.select-tests.result != 'success' ||
+          fromJSON(needs.select-tests.outputs.lanes).benchmark) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
