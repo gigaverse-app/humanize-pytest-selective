@@ -1,18 +1,8 @@
-# Published action tags are intentional for the trusted CI publishers below.
-# Other publishers retain zizmor's hash-pinning requirement.
+# Preserve upstream SHA pinning; only the newly adopted Gigaverse actions use release tags.
 rules:
   unpinned-uses:
     config:
       policies:
         "*": hash-pin
-        actions/checkout: ref-pin
-        actions/setup-python: ref-pin
-        actions/upload-artifact: ref-pin
-        actions/download-artifact: ref-pin
-        astral-sh/setup-uv: ref-pin
-        codecov/codecov-action: ref-pin
-        CodSpeedHQ/action: ref-pin
-        hynek/build-and-inspect-python-package: ref-pin
-        pypa/gh-action-pypi-publish: ref-pin
         gigaverse-app/pytest-selective/actions/plan-lanes: ref-pin
         gigaverse-app/ci-esta/.github/workflows/report.yml: ref-pin
