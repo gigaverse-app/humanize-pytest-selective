@@ -1,0 +1,8 @@
+# Preserve upstream SHA pinning; only the newly adopted Gigaverse actions use release tags.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "*": hash-pin
+        gigaverse-app/pytest-selective/actions/plan-lanes: ref-pin
+        gigaverse-app/ci-esta/.github/workflows/report.yml: ref-pin
