@@ -1,6 +1,16 @@
 name: Lint
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  workflow_dispatch:
+    inputs:
+      full:
+        type: choice
+        options: ["true", "false"]
+        required: true
+      base:
+        type: string
+        required: true
+run-name: Historical PR 501 full=${{ inputs.full }}
 
 permissions: {}
 

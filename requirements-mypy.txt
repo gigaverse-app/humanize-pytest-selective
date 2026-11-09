@@ -2,3 +2,5 @@ mypy==2.4.0
 pytest
 types-freezegun
 types-setuptools
+pytest-selective>=1.3,<2
+types-pyyaml
