@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -252,12 +251,12 @@ def squash(text: str) -> str:
 
 
 def assert_pinned_planner(job: dict[str, Any]) -> None:
-    """``job`` plans with a commit-pinned plan-lanes action and this configuration."""
+    """The job uses the published planner major and repository configuration."""
     step = next(
         step for step in job["steps"] if step.get("uses", "").startswith(PLAN_LANES)
     )
     assert step["with"]["config"] == ".github/test-lanes.json"
-    assert re.fullmatch(r"[0-9a-f]{40}", step["uses"].removeprefix(PLAN_LANES))
+    assert step["uses"] == PLAN_LANES + "v1"
 
 
 def test_every_lane_gates_a_job() -> None:
@@ -270,8 +269,7 @@ def test_every_lane_gates_a_job() -> None:
     benchmark = workflow("benchmark.yml")["jobs"]["benchmarks"]
     assert benchmark["needs"] == "select-tests"
     assert squash(benchmark["if"]) == squash(
-        "${{ always() && !cancelled() && (github.event_name != 'pull_request' || "
-        "needs.select-tests.result != 'success' || "
+        "${{ always() && !cancelled() && (needs.select-tests.result != 'success' || "
         "fromJSON(needs.select-tests.outputs.lanes).benchmark) }}"
     )
     build = workflow("release.yml")["jobs"]["build-package"]
@@ -299,16 +297,14 @@ def test_every_lane_gates_a_job() -> None:
 
 
 def test_routing_job_installs_the_planner_release() -> None:
-    """The routing job, Mypy and every planner use the same pytest-selective release."""
-    pins = set()
+    """Routing, Mypy and the planner use compatible pytest-selective v1 releases."""
     for name in ("test.yml", "benchmark.yml", "release.yml"):
         text = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
-        pins |= set(re.findall(re.escape(PLAN_LANES) + r"[0-9a-f]{40} # v(\S+)", text))
+        assert PLAN_LANES + "v1" in text
     run = workflow("test.yml")["jobs"]["routing"]["steps"][-1]["run"]
-    pins |= set(re.findall(r"pytest-selective==(\S+)", run))
+    assert '"pytest-selective>=1.3,<2"' in run
     mypy = (ROOT / "requirements-mypy.txt").read_text(encoding="utf-8")
-    pins |= set(re.findall(r"pytest-selective==(\S+)", mypy))
-    assert len(pins) == 1, pins
+    assert "pytest-selective>=1.3,<2" in mypy
 
 
 def heredoc(run: str) -> str:
@@ -330,6 +326,8 @@ def heredoc(run: str) -> str:
         ("success", '{"tests": true, "routing": true}', "cancelled", "success", False),
         # A failed planner runs every job, and still blocks the gate.
         ("failure", "", "success", "success", False),
+        ("success", "{}", "success", "success", False),
+        ("success", '{"tests": "true", "routing": true}', "success", "success", False),
     ],
 )
 def test_success_gate_accepts_only_planned_skips(
@@ -355,3 +353,17 @@ def test_success_gate_accepts_only_planned_skips(
         [sys.executable, "-c", heredoc(step["run"])], env=env, check=False
     )
     assert (completed.returncode == 0) is passes
+
+
+def test_fork_benchmarks_execute_without_publishing() -> None:
+    """Forks run benchmarks locally; only upstream publishes to CodSpeed."""
+    steps = workflow("benchmark.yml")["jobs"]["benchmarks"]["steps"]
+    published = next(
+        step for step in steps if step.get("uses", "").startswith("CodSpeedHQ/action@")
+    )
+    assert published["if"] == "github.event.repository.fork == false"
+    local = next(
+        step for step in steps if step.get("name") == "Run benchmark tests on forks"
+    )
+    assert local["if"] == "github.event.repository.fork == true"
+    assert local["run"].strip() == "pytest tests/test_benchmarks.py --benchmark-disable"
