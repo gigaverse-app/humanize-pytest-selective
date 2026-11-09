@@ -1,6 +1,18 @@
 name: Benchmark
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  workflow_dispatch:
+    inputs:
+      full:
+        type: choice
+        options: ["true", "false"]
+        required: true
+      base:
+        type: string
+        required: true
+  schedule:
+    - cron: "17 4 * * 1"
+run-name: Historical PR 494 full=${{ inputs.full }}
 
 permissions: {}
 
@@ -9,7 +21,29 @@ env:
   PIP_DISABLE_PIP_VERSION_CHECK: 1
 
 jobs:
+  select-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      lanes: ${{ steps.plan.outputs.lanes }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: plan
+        uses: gigaverse-app/pytest-selective/actions/plan-lanes@v1
+        with:
+          config: .github/test-lanes.json
+          base: ${{ inputs.base }}
+          full: ${{ inputs.full }}
+
   benchmarks:
+    needs: select-tests
+    # Preserve full manual/scheduled checkpoints; ordinary changes use the plan.
+    # A failed planner never skips the benchmark lane.
+    if: >-
+      ${{ always() && !cancelled() && (needs.select-tests.result != 'success' ||
+          fromJSON(needs.select-tests.outputs.lanes).benchmark) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,7 +67,13 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[tests]"
 
+      # Forks cannot upload to the upstream CodSpeed integration.
+      - name: Run benchmark tests on forks
+        if: github.event.repository.fork == true
+        run: pytest tests/test_benchmarks.py --benchmark-disable
+
       - name: Run benchmarks
+        if: github.event.repository.fork == false
         uses: CodSpeedHQ/action@821a40cd6c80e3cfe387caf55668287addd808da # v5.5.0
         with:
           mode: simulation
